@@ -3,7 +3,7 @@
 package gosigar
 
 import (
-	"io/ioutil"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -90,12 +90,30 @@ func (self *ProcFDUsage) Get(pid int) error {
 	if err != nil {
 		return err
 	}
-	fds, err := ioutil.ReadDir(procFileName(pid, "fd"))
+
+	openFDs, err := getDirEntryCount(procFileName(pid, "fd"))
 	if err != nil {
 		return err
 	}
-	self.Open = uint64(len(fds))
+	self.Open = openFDs
 	return nil
+}
+
+func getDirEntryCount(dirPath string) (uint64, error) {
+	f, err := os.Open(dirPath)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+
+	// We only care about the count of entries in the directory.
+	// We don't need full DirEntry or FileInfo objects and
+	// don't need them sorted.
+	fds, err := f.Readdirnames(0 /* limit, 0 = unlimited */)
+	if err != nil {
+		return 0, err
+	}
+	return uint64(len(fds)), nil
 }
 
 func parseCpuStat(self *Cpu, line string) error {
